@@ -71,7 +71,7 @@
 在这部分，我们需要作下面几件事：
 
     *创建第一个测试FT
-    
+
     *在``settings.py``配置数据库
 
     *打开站点管理：django admin
@@ -136,3 +136,212 @@
 这样做还不错，告诉Django这是个测试的函数，开发人员看到也知道！
 
 我们用了``LiveServerTestCase``，在Django1.4版本新加的模块，测试到时候，它会调用Djagno到web服务，也就是``runserver``。
+
+这两个函数``setUp``和``tearDown``是在每个测试开始前和结束后执行到。使用这两个函数启动关闭Selenium WebDriver浏览器。
+
+特定到函数``implicitly_wait``是告诉WebDriver有一个3秒超时执行。
+
+接下来是3行测试代码：
+
+.. sourcecode:: python
+
+    self.browser.get(self.live_server_url + '/admin/')
+
+``self.browser``是Selenium对象到浏览器对象，又叫做``WebDriver``
+
+``.get``是告诉浏览器去那个的页面，url由``self.live_server_url``组成，我们使用``LiveServerTestCase``访问我们django的``/admin/``，admin site
+
+接下来是
+
+.. sourcecode:: python
+
+    body = self.browser.find_element_by_tag_name('body')
+
+``find_element_by_tag_name``是告诉Selenium找到页面到HTML元素标签名是``body``的，这个方法返回一个``WebElement``包含HTML元素到对象
+
+最后，我们做一个断言，我们希望测试在这里应该是通过或失败：
+
+.. sourcecode:: python
+
+    self.assertIn('Django administration', body.text)
+
+这等同于
+
+.. sourcecode:: python
+
+    assert 'Django administration' in body.text
+
+我们在``self.``测试函数中使用``unittest``的方法，因为我们会在错误信息中得到更多帮助信息
+
+``body``页面元素对象的``.text``属性基本上给了我们不包含HTML标记到所有可见文本内容。
+
+你可以去Selenium的文档了解更多关于``WebDriver``和``WebElement``的介绍（选择python作为开发语言到范例），或者了解更多源代码信息:
+
+Selenium文档：http://seleniumhq.org/docs/03_webdriver.html
+源代码地址：http://code.google.com/p/selenium/source/browse/trunk/py/selenium/webdriver/remote/webdriver.py
+
+
+在测试结尾，我们做了一个``TODO``调用了``self.fail()``意味着我们到测试无论如何都会在结尾这里失败，这是提醒我们还没有完成。
+
+对了，还有一件事：还是给用户一个用户名吧，我的是``Ryan``！
+
+测试第一个功能测试
+-----------------
+
+我们试着跑一下我们到功能测试：
+
+    python manage.py test fts
+
+我们会看到这样到结果：
+
+
+    $ python manage.py test fts
+    Creating test database for alias 'default'...
+    F
+    ======================================================================
+    FAIL: test_can_create_new_poll_via_admin_site (fts.tests.PollsTest)
+    ----------------------------------------------------------------------
+    Traceback (most recent call last):
+      File "/home/ryan/tdd/Test-Driven-Django-Tutorial-cn/mysite/fts/tests.py", line 22, in test_can_create_new_poll_via_admin_site
+        self.fail('finish this test')
+    AssertionError: finish this test
+
+    ----------------------------------------------------------------------
+    Ran 1 test in 11.023s
+
+    FAILED (failures=1)
+    Destroying test database for alias 'default'...
+
+这是为什么呢？因为Django1.6版本更新了``settings.py``文件，我们可以看到：
+
+.. sourcecode:: python
+    INSTALLED_APPS = (
+        'django.contrib.admin',
+        'django.contrib.auth',
+        'django.contrib.contenttypes',
+        'django.contrib.sessions',
+        'django.contrib.messages',
+        'django.contrib.staticfiles',
+    )
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        }
+    }
+
+如果你在Django1.5或者更低到版本上运行测试，你会得到以下几个错误：
+1，
+
+    django.core.exceptions.ImproperlyConfigured: App with label fts could not be found
+
+2，
+
+        raise ImproperlyConfigured("settings.DATABASES is improperly configured. "
+    django.core.exceptions.ImproperlyConfigured: settings.DATABASES is improperly configured. Please supply the ENGINE value. Check settings documentation for more details.
+
+3，
+
+    AssertionError: 'Django administration' not found in u'A server error occurred.  Please contact the administrator.'
+
+4，
+
+    TemplateDoesNotExist: 500.html
+
+这些错误是告诉你``settings.py``里面没有``fts``这个app，没有设置``database``数据库，没有打开``admin``等。
+
+既然在Django1.6，这些问题都不存在，我们就先不管他，现在就去同步数据库，用admin账户登录到admin site
+
+    $ python manage.py syncdb
+    Creating tables ...
+    Creating table django_admin_log
+    Creating table auth_permission
+    Creating table auth_group_permissions
+    Creating table auth_group
+    Creating table auth_user_groups
+    Creating table auth_user_user_permissions
+    Creating table auth_user
+    Creating table django_content_type
+    Creating table django_session
+
+    You just installed Django's auth system, which means you don't have any superusers defined.
+    Would you like to create one now? (yes/no): yes
+    Username (leave blank to use 'ryan'): admin
+    Email address: a@b.com
+    Password: (admin)
+    Password (again): (admin)
+    Superuser created successfully.
+    Installing custom SQL ...
+    Installing indexes ...
+    Installed 0 object(s) from 0 fixture(s)
+
+接下来，让我们``runserver``登录到admin看看
+
+    python manage.py runserver
+
+OK,居然可以登录！那我们就测试这个登录功能吧！
+
+.. sourcecode:: python
+    from django.test import LiveServerTestCase
+    from selenium import webdriver
+    from selenium.webdriver.common.keys import Keys
+    
+    class PollsTest(LiveServerTestCase):
+    
+        def setUp(self):
+            self.browser = webdriver.Firefox()
+            self.browser.implicitly_wait(3)
+    
+        def tearDown(self):
+            self.browser.quit()
+    
+        def test_can_create_new_poll_via_admin_site(self):
+            # Gertrude opens her web browser, and goes to the admin page
+            self.browser.get(self.live_server_url + '/admin/')
+    
+            # She sees the familiar 'Django administration' heading
+            body = self.browser.find_element_by_tag_name('body')
+            self.assertIn('Django administration', body.text)
+    
+            # She types in her username and passwords and hits return
+            username_field = self.browser.find_element_by_name('username')
+            username_field.send_keys('admin')
+    
+            password_field = self.browser.find_element_by_name('password')
+            password_field.send_keys('admin')
+            password_field.send_keys(Keys.RETURN)
+    
+            # her username and password are accepted, and she is taken to
+            # the Site Administration page
+            body = self.browser.find_element_by_tag_name('body')
+            self.assertIn('Site administration', body.text)
+    
+            # She now sees a couple of hyperlink that says "Polls"
+            polls_links = self.browser.find_elements_by_link_text('Polls')
+            self.assertEquals(len(polls_links), 2)
+    
+            # TODO: Gertrude uses the admin site to create a new Poll
+            self.fail('todo: finish tests')
+    
+在这里我们从``selenium.webdriver.common.keys``中``import``了``Keys``，就是为了获取到``/admin/``页面中到登录框，输入用户名和密码用的。
+
+让我们试着运行一下这个测试，看能不能登录成功：
+
+    python manage.py test fts
+    Creating test database for alias 'default'...
+    F
+    ======================================================================
+    FAIL: test_can_create_new_poll_via_admin_site (fts.tests.PollsTest)
+    ----------------------------------------------------------------------
+    Traceback (most recent call last):
+      File "/home/ryan/tdd/Test-Driven-Django-Tutorial-cn/mysite/fts/tests.py", line 33, in test_can_create_new_poll_via_admin_site
+        self.assertIn('Site administration', body.text)
+    AssertionError: 'Site administration' not found in u'Django administration\nPlease enter the correct username and password for a staff account. Note that both fields may be case-sensitive.\nUsername:\nPassword:\n '
+    
+    ----------------------------------------------------------------------
+    Ran 1 test in 13.676s
+    
+    FAILED (failures=1)
+    Destroying test database for alias 'default'...
+
+Oh no! 居然可以成功登录到admin site！
